@@ -10,11 +10,11 @@ ADMIN_PASSWORD = "admin123"
 [[d1_databases]]
 binding = "DB"
 database_name = "jadkel-db"
-database_id = "local"
+database_id = "4f81fd12-ae04-4f5c-9d01-2eda6f71599e"
 
 [[kv_namespaces]]
 binding = "SESSIONS"
-id = "local"
+id = "254db68285bc4be99809885790453e42"
 
 [dev]
 port = 8787

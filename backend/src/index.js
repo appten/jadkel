@@ -1,9 +1,13 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { jwt, sign, verify } from 'hono/jwt';
 
 const app = new Hono();
 
-app.use('*', cors({ origin: '*' }));
+app.onError((err, c) => {
+  console.error('Backend Error:', err);
+  return c.json({ error: err.message || 'Internal Server Error' }, 500);
+});
 
 // ─── Helpers ───
 const json = (c, data, status = 200) => c.json(data, status);
@@ -11,44 +15,93 @@ const err = (c, msg, status = 400) => c.json({ error: msg }, status);
 const DAYS = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 const TIME_SLOTS = ['07:00','07:50','08:40','09:30','10:20','11:10','12:00','12:50','13:40','14:30','15:20','16:10','17:00'];
 
-function simpleHash(str) {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) { h = ((h << 5) - h + str.charCodeAt(i)) | 0; }
-  return Math.abs(h).toString(36);
+// Secure Password Hashing using PBKDF2
+async function hashPassword(password, salt) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+  const saltBuffer = enc.encode(salt);
+  const hashBuffer = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: saltBuffer,
+      iterations: 100000,
+      hash: 'SHA-256'
+    },
+    keyMaterial,
+    256
+  );
+  return btoa(String.fromCharCode(...new Uint8Array(hashBuffer)));
 }
 
-function verifyToken(c) {
-  const auth = c.req.header('Authorization');
-  if (!auth || !auth.startsWith('Bearer ')) return null;
-  const token = auth.slice(7);
-  try {
-    const [header, payload, sig] = token.split('.');
-    const data = JSON.parse(atob(payload));
-    if (data.exp && data.exp < Date.now()) return null;
-    return data;
-  } catch { return null; }
-}
+// ─── Middleware ───
+app.use('*', cors({ origin: '*' }));
 
-function makeToken(payload, secret) {
-  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const body = btoa(JSON.stringify({ ...payload, exp: Date.now() + 86400000 }));
-  const sig = simpleHash(header + '.' + body + secret);
-  return header + '.' + body + '.' + sig;
-}
+// JWT Auth Middleware for /api/admin/*
+app.use('/api/admin/*', async (c, next) => {
+  if (c.req.method === 'OPTIONS') return await next();
+  const authHandler = jwt({ secret: c.env.JWT_SECRET, alg: 'HS256' });
+  return authHandler(c, next);
+});
 
 // ─── Auth ───
 app.post('/api/auth/login', async (c) => {
   const { username, password } = await c.req.json();
-  if (username === c.env.ADMIN_USERNAME && password === c.env.ADMIN_PASSWORD) {
-    const token = makeToken({ sub: username, role: 'admin' }, c.env.JWT_SECRET);
-    return json(c, { token, user: { username, role: 'admin' } });
+  
+  // 1. Get user from DB
+  const user = await c.env.DB.prepare('SELECT * FROM admins WHERE username = ?').bind(username).first();
+  
+  if (!user) {
+    // If no admin exists at all, allow creating the first one (Emergency Setup)
+    const count = await c.env.DB.prepare('SELECT COUNT(*) as c FROM admins').first();
+    if (count.c === 0 && username === 'admin') {
+      const salt = crypto.randomUUID();
+      const hash = await hashPassword(password, salt);
+      await c.env.DB.prepare('INSERT INTO admins (username, password_hash, name, role) VALUES (?, ?, ?, ?)')
+        .bind('admin', `${salt}:${hash}`, 'Administrator', 'super_admin')
+        .run();
+      return json(c, { message: 'Admin account created. Please login again.' });
+    }
+    return err(c, 'Invalid credentials', 401);
   }
+
+  // 2. Verify password
+  const [salt, storedHash] = user.password_hash.split(':');
+  const computedHash = await hashPassword(password, salt);
+  
+  if (computedHash === storedHash) {
+    const payload = {
+      sub: user.username,
+      name: user.name,
+      role: user.role,
+      exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24), // 24 hours
+    };
+    const token = await sign(payload, c.env.JWT_SECRET, 'HS256');
+    return json(c, { token, user: { username: user.username, name: user.name, role: user.role } });
+  }
+
   return err(c, 'Invalid credentials', 401);
 });
 
-app.get('/api/auth/verify', (c) => {
-  const user = verifyToken(c);
-  return user ? json(c, { valid: true, user }) : err(c, 'Invalid token', 401);
+app.get('/api/auth/verify', async (c) => {
+  const payload = c.get('jwtPayload');
+  if (payload) return json(c, { valid: true, user: payload });
+  
+  // If not using middleware yet (public endpoint), try manual verify
+  const auth = c.req.header('Authorization');
+  if (auth && auth.startsWith('Bearer ')) {
+    try {
+      const token = auth.slice(7);
+      const decoded = await verify(token, c.env.JWT_SECRET, 'HS256');
+      return json(c, { valid: true, user: decoded });
+    } catch { return err(c, 'Invalid token', 401); }
+  }
+  return err(c, 'No token provided', 401);
 });
 
 // ─── Public: Semesters ───
@@ -90,8 +143,8 @@ app.get('/api/courses', async (c) => {
 app.get('/api/schedules', async (c) => {
   const { semester, program, day, lecturer, room } = c.req.query();
   let sql = `SELECT s.*, c.code as course_code, c.name as course_name, c.sks, c.semester_level,
-    (SELECT GROUP_CONCAT(l.name, ' | ') FROM schedule_lecturers sl JOIN lecturers l ON sl.lecturer_id = l.id WHERE sl.schedule_id = s.id) as lecturer_name,
-    (SELECT GROUP_CONCAT(l.title, ' | ') FROM schedule_lecturers sl JOIN lecturers l ON sl.lecturer_id = l.id WHERE sl.schedule_id = s.id) as lecturer_title,
+    (SELECT GROUP_CONCAT(COALESCE(l.title_front || ' ', '') || l.name || COALESCE(', ' || l.title_back, ''), ' | ') FROM schedule_lecturers sl JOIN lecturers l ON sl.lecturer_id = l.id WHERE sl.schedule_id = s.id) as lecturer_name,
+    (SELECT GROUP_CONCAT(COALESCE(l.title_front, '') || ' | ' || COALESCE(l.title_back, ''), ' | ') FROM schedule_lecturers sl JOIN lecturers l ON sl.lecturer_id = l.id WHERE sl.schedule_id = s.id) as lecturer_title,
     (SELECT GROUP_CONCAT(l.id, ',') FROM schedule_lecturers sl JOIN lecturers l ON sl.lecturer_id = l.id WHERE sl.schedule_id = s.id) as lecturer_ids,
     r.code as room_code, r.name as room_name, r.building,
     p.code as program_code, p.name as program_name,
@@ -189,8 +242,8 @@ app.get('/api/search', async (c) => {
   if (!q || q.length < 2) return err(c, 'query too short');
   const like = `%${q}%`;
   let sql = `SELECT s.*, c.code as course_code, c.name as course_name, c.sks,
-    (SELECT GROUP_CONCAT(l.name, ' | ') FROM schedule_lecturers sl JOIN lecturers l ON sl.lecturer_id = l.id WHERE sl.schedule_id = s.id) as lecturer_name,
-    (SELECT GROUP_CONCAT(l.title, ' | ') FROM schedule_lecturers sl JOIN lecturers l ON sl.lecturer_id = l.id WHERE sl.schedule_id = s.id) as lecturer_title,
+    (SELECT GROUP_CONCAT(COALESCE(l.title_front || ' ', '') || l.name || COALESCE(', ' || l.title_back, ''), ' | ') FROM schedule_lecturers sl JOIN lecturers l ON sl.lecturer_id = l.id WHERE sl.schedule_id = s.id) as lecturer_name,
+    (SELECT GROUP_CONCAT(COALESCE(l.title_front, '') || ' | ' || COALESCE(l.title_back, ''), ' | ') FROM schedule_lecturers sl JOIN lecturers l ON sl.lecturer_id = l.id WHERE sl.schedule_id = s.id) as lecturer_title,
     r.code as room_code, r.name as room_name, r.building,
     p.code as program_code, p.name as program_name
     FROM schedules s
@@ -206,11 +259,10 @@ app.get('/api/search', async (c) => {
   return json(c, rows.results);
 });
 
-// ─── Admin Middleware ───
+// ─── Admin Middleware (Internal use for routes) ───
 const adminOnly = async (c, next) => {
-  const user = verifyToken(c);
+  const user = c.get('jwtPayload');
   if (!user) return err(c, 'Unauthorized', 401);
-  c.set('user', user);
   await next();
 };
 
@@ -305,7 +357,7 @@ const crudRoutes = [
   { path: 'semesters', table: 'semesters', fields: ['name','academic_year','period','is_active'] },
   { path: 'programs', table: 'programs', fields: ['code','name','faculty'] },
   { path: 'rooms', table: 'rooms', fields: ['code','name','building','floor','capacity','type'] },
-  { path: 'lecturers', table: 'lecturers', fields: ['nip','name','title','email'] },
+  { path: 'lecturers', table: 'lecturers', fields: ['nip','name','title_front','title_back','email'] },
   { path: 'courses', table: 'courses', fields: ['code','name','sks','semester_level','program_id'] },
 ];
 

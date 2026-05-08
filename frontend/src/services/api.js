@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:8787/api';
+const API_BASE = 'https://jadkel-api.appten.workers.dev/api';
 
 function getToken() { return localStorage.getItem('jadkel_token'); }
 function setToken(t) { localStorage.setItem('jadkel_token', t); }
@@ -8,10 +8,22 @@ async function request(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
   const token = getToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
-  return data;
+  
+  try {
+    const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      throw new Error(`Server Error (${res.status}): ${text.slice(0, 100)}`);
+    }
+    if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+    return data;
+  } catch (e) {
+    console.error('API Error:', e);
+    throw e;
+  }
 }
 
 export const api = {
