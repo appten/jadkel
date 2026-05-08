@@ -1,0 +1,20 @@
+name = "jadkel-api"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+[vars]
+JWT_SECRET = "jadkel-secret-change-in-production"
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "admin123"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "jadkel-db"
+database_id = "local"
+
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "local"
+
+[dev]
+port = 8787
