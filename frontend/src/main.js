@@ -454,6 +454,8 @@ async function adminPage(app) {
   }
 
   const path = location.pathname;
+  let editScheduleId = null;
+  let editEntityId = null;
   
   // Shared UI Update for Bulk Delete
   const updateBulkUI = () => {
@@ -507,8 +509,6 @@ async function adminPage(app) {
     ]);
     const activeSem = semesters.find(s => s.is_active) || semesters[0];
     const schedules = activeSem ? await api.getSchedules({ semester: activeSem.id }) : [];
-
-    let editScheduleId = null;
 
     app.innerHTML = adminShell('schedules', `
       <div class="section-header"><h1 class="section-title">📆 Kelola Jadwal</h1>
@@ -769,7 +769,6 @@ async function adminPage(app) {
     const data = await cfg.fetch();
     const entityName = cfg.title.split(' ').slice(1).join(' ');
     let allPrograms = cfg.entity === 'courses' ? await api.getPrograms() : [];
-    let editEntityId = null;
 
     app.innerHTML = adminShell(tab, `
       <div class="section-header"><h1 class="section-title">${cfg.title}</h1>
@@ -929,8 +928,28 @@ async function adminPage(app) {
       const id = editBtn.dataset.edit;
       const s = (await api.getSchedules({ semester: (await api.getSemesters()).find(s=>s.is_active)?.id })).find(x => x.id == id);
       if(!s) return;
-      editScheduleId = id; // This needs to be accessible, or we just use the local logic
-      // To keep it simple, I'll just re-attach the specific listeners in the render blocks instead of global delegation for complex edits
+      editScheduleId = id;
+      document.getElementById('sModalTitle').textContent = 'Edit Jadwal';
+      document.getElementById('mCourseInput').value = `${s.course_code} - ${s.course_name}`;
+      document.getElementById('mGroup').value = s.class_group;
+      const l_ids = (s.lecturer_ids || '').split(',').filter(x=>x);
+      document.querySelectorAll('.lecturer-cb').forEach(cb => cb.checked = l_ids.includes(cb.value));
+      document.getElementById('mRoomInput').value = `${s.room_code} - ${s.room_name}`;
+      document.getElementById('mDay').value = s.day;
+      document.getElementById('mStart').value = s.time_start;
+      document.getElementById('mEnd').value = s.time_end;
+      document.getElementById('schedModal').classList.add('active');
+    }
+    // Edit Generic Entities
+    const editEBtn = e.target.closest('[data-edit-id]');
+    if (editEBtn) {
+      const id = editEBtn.dataset.editId;
+      const row = data.find(x => x.id == id);
+      if (!row) return;
+      editEntityId = id;
+      document.getElementById('eModalTitle').textContent = 'Edit ' + entityName;
+      cfg.cols.forEach(c => { const el = document.getElementById(`ef_${c}`); if(el) el.value = row[c] || ''; });
+      document.getElementById('entityModal').classList.add('active');
     }
   });
 
