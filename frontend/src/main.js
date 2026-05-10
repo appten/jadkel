@@ -456,6 +456,11 @@ async function adminPage(app) {
   const path = location.pathname;
   let editScheduleId = null;
   let editEntityId = null;
+  let currentAdminData = []; // Shared data for generic CRUD
+  let currentAdminCfg = null; // Shared config for generic CRUD
+  let currentAdminEntityName = '';
+  let currentAdminSchedules = []; // Shared schedules data
+
   
   // Shared UI Update for Bulk Delete
   const updateBulkUI = () => {
@@ -509,6 +514,8 @@ async function adminPage(app) {
     ]);
     const activeSem = semesters.find(s => s.is_active) || semesters[0];
     const schedules = activeSem ? await api.getSchedules({ semester: activeSem.id }) : [];
+    currentAdminSchedules = schedules;
+
 
     app.innerHTML = adminShell('schedules', `
       <div class="section-header"><h1 class="section-title">📆 Kelola Jadwal</h1>
@@ -767,8 +774,12 @@ async function adminPage(app) {
     if (!cfg) { app.innerHTML = adminShell('dashboard', '<p>Halaman tidak ditemukan</p>'); return; }
     
     const data = await cfg.fetch();
+    currentAdminData = data;
+    currentAdminCfg = cfg;
     const entityName = cfg.title.split(' ').slice(1).join(' ');
+    currentAdminEntityName = entityName;
     let allPrograms = cfg.entity === 'courses' ? await api.getPrograms() : [];
+
 
     app.innerHTML = adminShell(tab, `
       <div class="section-header"><h1 class="section-title">${cfg.title}</h1>
@@ -926,7 +937,7 @@ async function adminPage(app) {
     const editBtn = e.target.closest('[data-edit]');
     if (editBtn) {
       const id = editBtn.dataset.edit;
-      const s = (await api.getSchedules({ semester: (await api.getSemesters()).find(s=>s.is_active)?.id })).find(x => x.id == id);
+      const s = currentAdminSchedules.find(x => x.id == id);
       if(!s) return;
       editScheduleId = id;
       document.getElementById('sModalTitle').textContent = 'Edit Jadwal';
@@ -944,13 +955,14 @@ async function adminPage(app) {
     const editEBtn = e.target.closest('[data-edit-id]');
     if (editEBtn) {
       const id = editEBtn.dataset.editId;
-      const row = data.find(x => x.id == id);
-      if (!row) return;
+      const row = currentAdminData.find(x => x.id == id);
+      if (!row || !currentAdminCfg) return;
       editEntityId = id;
-      document.getElementById('eModalTitle').textContent = 'Edit ' + entityName;
-      cfg.cols.forEach(c => { const el = document.getElementById(`ef_${c}`); if(el) el.value = row[c] || ''; });
+      document.getElementById('eModalTitle').textContent = 'Edit ' + currentAdminEntityName;
+      currentAdminCfg.cols.forEach(c => { const el = document.getElementById(`ef_${c}`); if(el) el.value = row[c] || ''; });
       document.getElementById('entityModal').classList.add('active');
     }
+
   });
 
   bindHeader();

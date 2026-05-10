@@ -26,15 +26,15 @@ INSERT INTO rooms (code, name, building, floor, capacity, type) VALUES
 ('AUD-1', 'Auditorium Utama', 'Gedung C', 1, 200, 'auditorium');
 
 -- Lecturers
-INSERT INTO lecturers (nip, name, title, email) VALUES
-('198501012010011001', 'Dr. Ahmad Rizal', 'S.Kom., M.Cs.', 'ahmad.rizal@univ.ac.id'),
-('198702152011021002', 'Budi Santoso', 'S.T., M.Kom.', 'budi.santoso@univ.ac.id'),
-('199003202012031003', 'Dr. Citra Dewi', 'S.Si., M.Sc.', 'citra.dewi@univ.ac.id'),
-('198805102013041004', 'Dian Purnama', 'S.Kom., M.T.', 'dian.purnama@univ.ac.id'),
-('199201082014051005', 'Eko Prasetyo', 'S.T., M.Eng.', 'eko.prasetyo@univ.ac.id'),
-('198607122010011006', 'Dr. Fitri Handayani', 'S.Kom., M.Kom.', 'fitri.h@univ.ac.id'),
-('199105032015061007', 'Gunawan Wibowo', 'S.Kom., M.Cs.', 'gunawan.w@univ.ac.id'),
-('198904222011021008', 'Hendra Wijaya', 'S.T., M.Kom.', 'hendra.w@univ.ac.id');
+INSERT INTO lecturers (nip, name, title_front, title_back, email) VALUES
+('198501012010011001', 'Ahmad Rizal', 'Dr.', 'S.Kom., M.Cs.', 'ahmad.rizal@univ.ac.id'),
+('198702152011021002', 'Budi Santoso', '', 'S.T., M.Kom.', 'budi.santoso@univ.ac.id'),
+('199003202012031003', 'Citra Dewi', 'Dr.', 'S.Si., M.Sc.', 'citra.dewi@univ.ac.id'),
+('198805102013041004', 'Dian Purnama', '', 'S.Kom., M.T.', 'dian.purnama@univ.ac.id'),
+('199201082014051005', 'Eko Prasetyo', '', 'S.T., M.Eng.', 'eko.prasetyo@univ.ac.id'),
+('198607122010011006', 'Fitri Handayani', 'Dr.', 'S.Kom., M.Kom.', 'fitri.h@univ.ac.id'),
+('199105032015061007', 'Gunawan Wibowo', '', 'S.Kom., M.Cs.', 'gunawan.w@univ.ac.id'),
+('198904222011021008', 'Hendra Wijaya', '', 'S.T., M.Kom.', 'hendra.w@univ.ac.id');
 
 -- Courses (Teknik Informatika)
 INSERT INTO courses (code, name, sks, semester_level, program_id) VALUES

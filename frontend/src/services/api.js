@@ -1,4 +1,7 @@
-const API_BASE = 'https://jadkel-api.appten.workers.dev/api';
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+  ? 'http://localhost:8787/api' 
+  : 'https://jadkel-api.appten.workers.dev/api';
+
 
 function getToken() { return localStorage.getItem('jadkel_token'); }
 function setToken(t) { localStorage.setItem('jadkel_token', t); }

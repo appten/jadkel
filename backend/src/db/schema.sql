@@ -1,8 +1,17 @@
 -- JadKel Database Schema
 -- Cloudflare D1 (SQLite)
 
+DROP TABLE IF EXISTS schedule_lecturers;
+DROP TABLE IF EXISTS schedules;
+DROP TABLE IF EXISTS courses;
+DROP TABLE IF EXISTS lecturers;
+DROP TABLE IF EXISTS rooms;
+DROP TABLE IF EXISTS programs;
+DROP TABLE IF EXISTS semesters;
+DROP TABLE IF EXISTS admins;
+
 -- Semester
-CREATE TABLE IF NOT EXISTS semesters (
+CREATE TABLE semesters (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   academic_year TEXT NOT NULL,
@@ -35,7 +44,8 @@ CREATE TABLE IF NOT EXISTS lecturers (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   nip TEXT UNIQUE,
   name TEXT NOT NULL,
-  title TEXT,
+  title_front TEXT,
+  title_back TEXT,
   email TEXT
 );
 
